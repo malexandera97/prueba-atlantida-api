@@ -1,0 +1,552 @@
+{
+  "info": {
+    "name": "Prueba Atlantida API",
+    "description": "Ejecutar en orden con la base recién creada (datos del Anexo A). La variable clave se genera sola en cada ejecución (Idempotency-Key).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('clave')) { pm.collectionVariables.set('clave', 'pm-' + Date.now()); }"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "clave",
+      "value": ""
+    },
+    {
+      "key": "transferId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Cuentas",
+      "item": [
+        {
+          "name": "1.1 Listar cuentas -> 200 (3)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('3 cuentas', () => pm.expect(b.length).to.eql(3));",
+                  "pm.test('1001 Juan Pérez', () => pm.expect(b[0].holderName).to.eql(\"Juan Pérez\"));",
+                  "pm.test('saldo inicial 5000', () => pm.expect(b[0].balance).to.eql(5000));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.2 Detalle 1001 -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts/1001"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('id', () => pm.expect(b.id).to.eql(1001));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.3 Cuenta inexistente -> 404",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts/9999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "const b = pm.response.json();",
+                  "pm.test('mensaje', () => pm.expect(b.message).to.eql(\"No existe la cuenta 9999\"));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Transferencias",
+      "item": [
+        {
+          "name": "2.1 Transferir 500 de 1001 a 1002 -> 201",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{clave}}-1"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 1002,\n  \"amount\": 500.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('Trae Location', () => pm.expect(pm.response.headers.get('Location')).to.include('/api/transfers/'));",
+                  "pm.test('saldo nuevo origen', () => pm.expect(b.source.newBalance).to.eql(4500));",
+                  "pm.test('saldo nuevo destino', () => pm.expect(b.destination.newBalance).to.eql(2500));",
+                  "pm.collectionVariables.set('transferId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 Reintento con la misma Idempotency-Key -> 200 (no cobra dos veces)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{clave}}-1"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 1002,\n  \"amount\": 500.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('Misma transferencia', () => pm.expect(b.id).to.eql(Number(pm.collectionVariables.get('transferId'))));",
+                  "pm.test('Cabecera Idempotent-Replayed', () => pm.expect(pm.response.headers.get('Idempotent-Replayed')).to.eql('true'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.3 Misma clave con otro monto -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{clave}}-1"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 1002,\n  \"amount\": 10.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4 Fondos insuficientes (6000 desde 1001) -> 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 1003,\n  \"amount\": 6000.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "const b = pm.response.json();",
+                  "pm.test('mensaje de la API', () => pm.expect(b.message).to.eql(\"Fondos insuficientes en la cuenta 1001. Los saldos no cambiaron.\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5 Misma cuenta origen y destino -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 1001,\n  \"amount\": 10.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6 Monto cero y falta la cuenta destino -> 400 con errores por campo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"amount\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "const b = pm.response.json();",
+                  "pm.test('2 errores', () => pm.expect(b.errors.length).to.eql(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.7 Cuenta destino inexistente -> 404",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Usuario",
+                "value": "postman"
+              }
+            ],
+            "url": "{{baseUrl}}/api/transfers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccountId\": 1001,\n  \"destinationAccountId\": 9999,\n  \"amount\": 10.0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.8 Consultar la transferencia -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/transfers/{{transferId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('monto', () => pm.expect(b.amount).to.eql(500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Historial y saldos",
+      "item": [
+        {
+          "name": "3.1 Historial de 1001 -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts/1001/transfers"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('1 transferencia', () => pm.expect(b.length).to.eql(1));",
+                  "pm.test('enviada', () => pm.expect(b[0].direction).to.eql(\"ENVIADA\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 Saldos finales (sin cambios por los rechazos)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('1001', () => pm.expect(b[0].balance).to.eql(4500));",
+                  "pm.test('1002', () => pm.expect(b[1].balance).to.eql(2500));",
+                  "pm.test('1003', () => pm.expect(b[2].balance).to.eql(10000));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Auditoría",
+      "item": [
+        {
+          "name": "4.1 Auditoría completa -> 200 (7 registros)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/audit"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('7 registros', () => pm.expect(b.length).to.eql(7));",
+                  "pm.test('Usuario postman', () => pm.expect(b[0].username).to.eql('postman'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Solo rechazadas -> 200 (5)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/audit?outcome=RECHAZADA"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('5 rechazos', () => pm.expect(b.length).to.eql(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 Exitosas y reintentos de la cuenta 1001 -> 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/audit?accountId=1001&outcome=EXITOSA"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('1 exitosa', () => pm.expect(b.length).to.eql(1));",
+                  "pm.test('Con número de transferencia', () => pm.expect(b[0].transferId).to.eql(Number(pm.collectionVariables.get('transferId'))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.4 Resultado inexistente -> 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/audit?outcome=DESCONOCIDO"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

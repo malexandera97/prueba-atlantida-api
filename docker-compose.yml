@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: prueba_atlantida
+      POSTGRES_USER: banco
+      POSTGRES_PASSWORD: banco
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banco -d prueba_atlantida"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: .
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/prueba_atlantida
+      DB_USER: banco
+      DB_PASSWORD: banco
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      JAVA_TOOL_OPTIONS: -Duser.timezone=America/Tegucigalpa
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ../prueba-atlantida-web
+      args:
+        VITE_API_URL: http://localhost:8080
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

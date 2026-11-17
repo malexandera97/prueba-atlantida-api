@@ -1,0 +1,16 @@
+target/
+*.log
+.env
+HELP.md
+.mvn/wrapper/maven-wrapper.jar
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+.apt_generated/
+.sts4-cache/
+.DS_Store
+Thumbs.db
