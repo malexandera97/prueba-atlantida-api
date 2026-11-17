@@ -4,6 +4,16 @@ API REST de Banco Atlántida para consultar cuentas y registrar transferencias e
 
 **Stack:** Java 21 · Spring Boot 4.1.2 · Spring Data JPA · PostgreSQL 16 · Flyway · JUnit 5 · Mockito.
 
+## Demo en línea (Render)
+
+| Pieza    | URL                                             |
+| -------- | ----------------------------------------------- |
+| API      | https://prueba-atlantida-api-1.onrender.com/api |
+| Frontend | https://prueba-atlantida-web.onrender.com       |
+
+1. Abrir primero https://prueba-atlantida-api-1.onrender.com/api/accounts y esperar la respuesta: el servicio gratuito se suspende tras 15 minutos sin uso.
+2. Luego abrir el frontend.
+
 ## Requisitos
 
 - JDK 21
@@ -31,11 +41,11 @@ mvn spring-boot:run
 
 API en `http://localhost:8080`.
 
-| Variable | Valor por defecto |
-|---|---|
-| `DB_URL` | `jdbc:postgresql://localhost:5432/prueba_atlantida` |
-| `DB_USER` / `DB_PASSWORD` | `banco` / `banco` |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` |
+| Variable                  | Valor por defecto                                   |
+| ------------------------- | --------------------------------------------------- |
+| `DB_URL`                  | `jdbc:postgresql://localhost:5432/prueba_atlantida` |
+| `DB_USER` / `DB_PASSWORD` | `banco` / `banco`                                   |
+| `CORS_ORIGINS`            | `http://localhost:5173,http://127.0.0.1:5173`       |
 
 ## Levantar el frontend
 
@@ -52,14 +62,14 @@ Usan la base `prueba_atlantida_test`. 24 pruebas: unitarias (Mockito) y de integ
 
 ## Endpoints
 
-| Método | Ruta | Respuesta |
-|---|---|---|
-| GET | `/api/accounts` | 200 |
-| GET | `/api/accounts/{id}` | 200 · 404 |
-| POST | `/api/transfers` | 201 · 200 (reintento idempotente) · 400 · 404 · 409 · 422 |
-| GET | `/api/transfers/{id}` | 200 · 404 |
-| GET | `/api/accounts/{id}/transfers` | 200 · 404 |
-| GET | `/api/audit?accountId=&outcome=&limit=` | 200 · 400 |
+| Método | Ruta                                    | Respuesta                                                 |
+| ------ | --------------------------------------- | --------------------------------------------------------- |
+| GET    | `/api/accounts`                         | 200                                                       |
+| GET    | `/api/accounts/{id}`                    | 200 · 404                                                 |
+| POST   | `/api/transfers`                        | 201 · 200 (reintento idempotente) · 400 · 404 · 409 · 422 |
+| GET    | `/api/transfers/{id}`                   | 200 · 404                                                 |
+| GET    | `/api/accounts/{id}/transfers`          | 200 · 404                                                 |
+| GET    | `/api/audit?accountId=&outcome=&limit=` | 200 · 400                                                 |
 
 Cabeceras opcionales de `POST /api/transfers`: `Idempotency-Key` (evita procesar dos veces la misma solicitud) y
 `X-Usuario` (usuario que se registra en la auditoría; si no se envía, `anonimo`).
@@ -77,7 +87,7 @@ curl http://localhost:8080/api/accounts/1001
 ```
 
 ```json
-{ "id": 1001, "holderName": "Juan Pérez", "balance": 5000.00 }
+{ "id": 1001, "holderName": "Juan Pérez", "balance": 5000.0 }
 ```
 
 ```bash
@@ -92,17 +102,33 @@ curl -X POST http://localhost:8080/api/transfers \
 ```json
 {
   "id": 1,
-  "amount": 500.00,
+  "amount": 500.0,
   "createdAt": "2026-11-17T09:44:12",
-  "source": { "accountId": 1001, "holderName": "Juan Pérez", "previousBalance": 5000.00, "newBalance": 4500.00 },
-  "destination": { "accountId": 1002, "holderName": "María López", "previousBalance": 2000.00, "newBalance": 2500.00 }
+  "source": {
+    "accountId": 1001,
+    "holderName": "Juan Pérez",
+    "previousBalance": 5000.0,
+    "newBalance": 4500.0
+  },
+  "destination": {
+    "accountId": 1002,
+    "holderName": "María López",
+    "previousBalance": 2000.0,
+    "newBalance": 2500.0
+  }
 }
 ```
 
 `422 Unprocessable Entity`
 
 ```json
-{ "status": 422, "error": "Unprocessable Entity", "message": "Fondos insuficientes en la cuenta 1001. Los saldos no cambiaron.", "path": "/api/transfers", "errors": [] }
+{
+  "status": 422,
+  "error": "Unprocessable Entity",
+  "message": "Fondos insuficientes en la cuenta 1001. Los saldos no cambiaron.",
+  "path": "/api/transfers",
+  "errors": []
+}
 ```
 
 ```bash
@@ -110,7 +136,17 @@ curl http://localhost:8080/api/accounts/1001/transfers
 ```
 
 ```json
-[{ "transferId": 1, "direction": "ENVIADA", "counterpartAccountId": 1002, "counterpartHolderName": "María López", "amount": 500.00, "balanceAfter": 4500.00, "createdAt": "2026-11-17T09:44:12" }]
+[
+  {
+    "transferId": 1,
+    "direction": "ENVIADA",
+    "counterpartAccountId": 1002,
+    "counterpartHolderName": "María López",
+    "amount": 500.0,
+    "balanceAfter": 4500.0,
+    "createdAt": "2026-11-17T09:44:12"
+  }
+]
 ```
 
 ```bash
@@ -118,10 +154,24 @@ curl "http://localhost:8080/api/audit?accountId=1001&outcome=RECHAZADA"
 ```
 
 ```json
-[{ "id": 4, "createdAt": "2026-11-17T10:40:12", "action": "TRANSFERENCIA", "outcome": "RECHAZADA", "httpStatus": 422,
-   "message": "Fondos insuficientes en la cuenta 1001. Los saldos no cambiaron.", "username": "cajero01",
-   "clientIp": "127.0.0.1", "userAgent": "Mozilla/5.0", "sourceAccountId": 1001, "destinationAccountId": 1003,
-   "amount": 6000.00, "idempotencyKey": null, "transferId": null }]
+[
+  {
+    "id": 4,
+    "createdAt": "2026-11-17T10:40:12",
+    "action": "TRANSFERENCIA",
+    "outcome": "RECHAZADA",
+    "httpStatus": 422,
+    "message": "Fondos insuficientes en la cuenta 1001. Los saldos no cambiaron.",
+    "username": "cajero01",
+    "clientIp": "127.0.0.1",
+    "userAgent": "Mozilla/5.0",
+    "sourceAccountId": 1001,
+    "destinationAccountId": 1003,
+    "amount": 6000.0,
+    "idempotencyKey": null,
+    "transferId": null
+  }
+]
 ```
 
 Colección de Postman: `postman/Prueba-Atlantida-API.postman_collection.json` (17 peticiones).
